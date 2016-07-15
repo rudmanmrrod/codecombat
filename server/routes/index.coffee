@@ -8,11 +8,14 @@ module.exports.setup = (app) ->
   app.post('/auth/login-gplus', mw.auth.loginByGPlus, mw.auth.afterLogin)
   app.post('/auth/logout', mw.auth.logout)
   app.get('/auth/name/?(:name)?', mw.auth.name)
+  app.get('/auth/email/?(:email)?', mw.auth.email)
   app.post('/auth/reset', mw.auth.reset)
   app.post('/auth/spy', mw.auth.spy)
   app.post('/auth/stop-spying', mw.auth.stopSpying)
   app.get('/auth/unsubscribe', mw.auth.unsubscribe)
   app.get('/auth/whoami', mw.auth.whoAmI)
+
+  app.post('/contact/send-parent-signup-instructions', mw.contact.sendParentSignupInstructions)
 
   app.delete('/db/*', mw.auth.checkHasUser())
   app.patch('/db/*', mw.auth.checkHasUser())
@@ -69,6 +72,7 @@ module.exports.setup = (app) ->
   app.post('/db/classroom/:classroomID/members/:memberID/reset-password', mw.classrooms.setStudentPassword)
   app.post('/db/classroom/:anything/members', mw.auth.checkLoggedIn(), mw.classrooms.join)
   app.get('/db/classroom/:handle', mw.auth.checkLoggedIn()) # TODO: Finish migrating route, adding now so 401 is returned
+  app.get('/db/classroom/-/users', mw.auth.checkHasPermission(['admin']), mw.classrooms.getUsers)
 
   CodeLog = require ('../models/CodeLog')
   app.post('/db/codelogs', mw.codelogs.post)
@@ -79,8 +83,9 @@ module.exports.setup = (app) ->
   app.get('/db/course/:handle', mw.rest.getByHandle(Course))
   app.get('/db/course/:handle/levels/:levelOriginal/next', mw.courses.fetchNextLevel)
 
+  app.get('/db/course_instance/-/non-hoc', mw.auth.checkHasPermission(['admin']), mw.courseInstances.fetchNonHoc)
   app.post('/db/course_instance/-/recent', mw.auth.checkHasPermission(['admin']), mw.courseInstances.fetchRecent)
-  app.get('/db/course_instance/:handle/levels/:levelOriginal/next', mw.courseInstances.fetchNextLevel)
+  app.get('/db/course_instance/:handle/levels/:levelOriginal/sessions/:sessionID/next', mw.courseInstances.fetchNextLevel)
   app.post('/db/course_instance/:handle/members', mw.auth.checkLoggedIn(), mw.courseInstances.addMembers)
   app.get('/db/course_instance/:handle/classroom', mw.auth.checkLoggedIn(), mw.courseInstances.fetchClassroom)
 
@@ -91,8 +96,12 @@ module.exports.setup = (app) ->
   app.put('/db/user/-/remain-teacher', mw.users.remainTeacher)
   app.post('/db/user/:userID/request-verify-email', mw.users.sendVerificationEmail)
   app.post('/db/user/:userID/verify/:verificationCode', mw.users.verifyEmailAddress) # TODO: Finalize URL scheme
-  
-  app.get('/db/level/:handle/session', mw.levels.upsertSession)
+  app.get('/db/level/:handle/session', mw.auth.checkHasUser(), mw.levels.upsertSession)
+  app.get('/db/user/-/students', mw.auth.checkHasPermission(['admin']), mw.users.getStudents)
+  app.get('/db/user/-/teachers', mw.auth.checkHasPermission(['admin']), mw.users.getTeachers)
+  app.post('/db/user/:handle/signup-with-facebook', mw.users.signupWithFacebook)
+  app.post('/db/user/:handle/signup-with-gplus', mw.users.signupWithGPlus)
+  app.post('/db/user/:handle/signup-with-password', mw.users.signupWithPassword)
   
   app.get('/db/prepaid', mw.auth.checkLoggedIn(), mw.prepaids.fetchByCreator)
   app.post('/db/prepaid', mw.auth.checkHasPermission(['admin']), mw.prepaids.post)
@@ -105,5 +114,6 @@ module.exports.setup = (app) ->
   app.post('/db/trial.request', mw.trialRequests.post)
   app.get('/db/trial.request/:handle', mw.auth.checkHasPermission(['admin']), mw.rest.getByHandle(TrialRequest))
   app.put('/db/trial.request/:handle', mw.auth.checkHasPermission(['admin']), mw.trialRequests.put)
+  app.get('/db/trial.request/-/users', mw.auth.checkHasPermission(['admin']), mw.trialRequests.getUsers)
 
   app.get('/healthcheck', mw.healthcheck)

@@ -31,8 +31,6 @@ block content
 
   ul
     li
-      a(href="/admin/level-sessions") Active Instances
-    li
       a(href="/admin/trial-requests") Trial Requests
     li
       a(href="/admin/user-code-problems") User Code Problems List
@@ -43,7 +41,14 @@ block content
     h4 Analytics
     ul
       li
+        a(href="/admin/classroom-levels") Classroom Levels
+      li
+        button.classroom-progress-csv.btn.btn-sm.btn-success Classroom Progress CSV
+        input.classroom-progress-class-code(type=text value="<class code>")
+      li
         a(href="/admin/analytics") Dashboard
+      li
+        a(href="/admin/school-counts") School Counts
       li
         a(href="/admin/analytics/subscriptions") Subscriptions
       li

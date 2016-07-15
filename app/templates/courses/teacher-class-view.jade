@@ -182,7 +182,8 @@ mixin studentsTab
         th.checkbox-col.select-all.small.text-center
           span(data-i18n="teacher.select_all")
           .checkbox-flat
-            input(type='checkbox' id='checkbox-all-students')
+            - var allStudentsChecked = _.all(state.get('checkboxStates'))
+            input(type='checkbox', id='checkbox-all-students', checked=allStudentsChecked)
             label.checkmark(for='checkbox-all-students')
         th
           +sortButtons
@@ -201,7 +202,7 @@ mixin studentRow(student)
   tr.student-row.alternating-background
     td.checkbox-col.student-checkbox
       .checkbox-flat
-        input(type='checkbox' id='checkbox-student-' + student.id, data-student-id=student.id)
+        input(type='checkbox' id='checkbox-student-' + student.id, data-student-id=student.id, checked=state.get('checkboxStates')[student.id])
         label.checkmark(for='checkbox-student-' + student.id)
     td.student-info-col
       .student-info
@@ -309,7 +310,8 @@ mixin courseOverview
     .course-overview-progress
       each level, index in levels
         - var progress = state.get('progressData').get({ classroom: view.classroom, course: course, level: level })
-        +allStudentsLevelProgressDot(progress, level, index+1)
+        - var levelNumber = view.classroom.getLevelNumber(level.get('original'), index + 1)
+        +allStudentsLevelProgressDot(progress, level, levelNumber)
 
 mixin studentLevelsRow(student)
   .student-levels-row.alternating-background
@@ -321,7 +323,8 @@ mixin studentLevelsRow(student)
       - var levels = view.classroom.getLevels({courseID: course.id}).models
       each level, index in levels
         - var progress = state.get('progressData').get({ classroom: view.classroom, course: course, level: level, user: student })
-        +studentLevelProgressDot(progress, level, index+1, session)
+        - var levelNumber = view.classroom.getLevelNumber(level.get('original'), index + 1)
+        +studentLevelProgressDot(progress, level, levelNumber, session)
   
 mixin studentCourseProgressDot(progress, levelsTotal, level, label)
   //- TODO: Refactor with TeacherClassesView jade

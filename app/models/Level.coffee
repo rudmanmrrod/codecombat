@@ -12,7 +12,8 @@ module.exports = class Level extends CocoModel
   urlRoot: '/db/level'
   editableByArtisans: true
 
-  serialize: (supermodel, session, otherSession, cached=false) ->
+  serialize: (options) ->
+    {supermodel, session, otherSession, @headless, @sessionless, cached=false} = options
     o = @denormalize supermodel, session, otherSession # hot spot to optimize
 
     # Figure out Components
@@ -58,7 +59,7 @@ module.exports = class Level extends CocoModel
 
   denormalize: (supermodel, session, otherSession) ->
     o = $.extend true, {}, @attributes
-    if o.thangs and @get('type', true) in ['hero', 'hero-ladder', 'hero-coop', 'course', 'course-ladder', 'game-dev', 'hero-practice']
+    if o.thangs and @get('type', true) in ['hero', 'hero-ladder', 'hero-coop', 'course', 'course-ladder', 'game-dev']
       thangTypesWithComponents = (tt for tt in supermodel.getModels(ThangType) when tt.get('components')?)
       thangTypesByOriginal = _.indexBy thangTypesWithComponents, (tt) -> tt.get('original')  # Optimization
       for levelThang in o.thangs
@@ -146,8 +147,8 @@ module.exports = class Level extends CocoModel
         levelThang.components.push placeholderComponent
 
     # Load the user's chosen hero AFTER getting stats from default char
-    if /Hero Placeholder/.test(levelThang.id) and @get('type', true) in ['course']
-      heroThangType = me.get('heroConfig')?.thangType
+    if /Hero Placeholder/.test(levelThang.id) and @get('type', true) in ['course'] and not @headless and not @sessionless
+      heroThangType = me.get('heroConfig')?.thangType or ThangType.heroes.captain
       levelThang.thangType = heroThangType if heroThangType
 
   sortSystems: (levelSystems, systemModels) ->
@@ -262,9 +263,9 @@ module.exports = class Level extends CocoModel
   isLadder: ->
     return @get('type')?.indexOf('ladder') > -1
 
-  fetchNextForCourse: ({ levelOriginalID, courseInstanceID, courseID }, options={}) ->
+  fetchNextForCourse: ({ levelOriginalID, courseInstanceID, courseID, sessionID }, options={}) ->
     if courseInstanceID
-      options.url = "/db/course_instance/#{courseInstanceID}/levels/#{levelOriginalID}/next"
+      options.url = "/db/course_instance/#{courseInstanceID}/levels/#{levelOriginalID}/sessions/#{sessionID}/next"
     else
       options.url = "/db/course/#{courseID}/levels/#{levelOriginalID}/next"
     @fetch(options)

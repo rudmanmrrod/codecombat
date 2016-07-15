@@ -62,6 +62,8 @@ module.exports = class LevelLoader extends CocoClass
       @listenToOnce @level, 'sync', @onLevelLoaded
 
   onLevelLoaded: ->
+    if not @sessionless and @level.get('type', true) in ['hero', 'hero-ladder', 'hero-coop', 'course']
+      @sessionDependenciesRegistered = {}
     if (@courseID and @level.get('type', true) not in ['course', 'course-ladder']) or window.serverConfig.picoCTF
       # Because we now use original hero levels for both hero and course levels, we fake being a course level in this context.
       originalGet = @level.get
@@ -83,8 +85,6 @@ module.exports = class LevelLoader extends CocoClass
   # Session Loading
 
   loadFakeSession: ->
-    if @level.get('type', true) in ['hero', 'hero-ladder', 'hero-coop']
-      @sessionDependenciesRegistered = {}
     initVals =
       level:
         original: @level.get('original')
@@ -113,9 +113,6 @@ module.exports = class LevelLoader extends CocoClass
     @loadDependenciesForSession @session
 
   loadSession: ->
-    if @level.get('type', true) in ['hero', 'hero-ladder', 'hero-coop', 'course']
-      @sessionDependenciesRegistered = {}
-
     if @sessionID
       url = "/db/level.session/#{@sessionID}"
       url += "?interpret=true" if @spectateMode
@@ -173,10 +170,9 @@ module.exports = class LevelLoader extends CocoClass
     else if session is @opponentSession
       @consolidateFlagHistory() if @session.loaded
     if @level.get('type', true) in ['course'] # course-ladder is hard to handle because there's 2 sessions
-      heroConfig = me.get('heroConfig')
-      console.log "Course mode, loading custom hero: ", heroConfig if LOG
-      return if not heroConfig
-      url = "/db/thang.type/#{heroConfig.thangType}/version"
+      heroThangType = me.get('heroConfig')?.thangType or ThangType.heroes.captain
+      console.log "Course mode, loading custom hero: ", heroThangType if LOG
+      url = "/db/thang.type/#{heroThangType}/version"
       if heroResource = @maybeLoadURL(url, ThangType, 'thang')
         console.log "Pushing resource: ", heroResource if LOG
         @worldNecessities.push heroResource
@@ -482,7 +478,7 @@ module.exports = class LevelLoader extends CocoClass
     @world.difficulty = @session?.get('state')?.difficulty ? 0
     if @observing
       @world.difficulty = Math.max 0, @world.difficulty - 1  # Show the difficulty they won, not the next one.
-    serializedLevel = @level.serialize(@supermodel, @session, @opponentSession)
+    serializedLevel = @level.serialize {@supermodel, @session, @opponentSession, @headless, @sessionless}
     @world.loadFromLevel serializedLevel, false
     console.log 'World has been initialized from level loader.' if LOG
 

@@ -1,8 +1,8 @@
 // Upsert new lead data into Close.io
 
 'use strict';
-if (process.argv.length !== 9) {
-  log("Usage: node <script> <Close.io general API key> <Close.io mail API key1> <Close.io mail API key2> <Close.io mail API key3> <Close.io EU mail API key> <Intercom 'App ID:API key'> <mongo connection Url>");
+if (process.argv.length !== 10) {
+  log("Usage: node <script> <Close.io general API key> <Close.io mail API key1> <Close.io mail API key2> <Close.io mail API key3> <Close.io mail API key4> <Close.io EU mail API key> <Intercom 'App ID:API key'> <mongo connection Url>");
   process.exit();
 }
 
@@ -64,18 +64,22 @@ const closeIoMailApiKeys = [
   },
   {
     apiKey: process.argv[4],
-    weight: .25
+    weight: .20
   },
   {
     apiKey: process.argv[5],
     weight: .05
   },
+  {
+    apiKey: process.argv[6],
+    weight: .05
+  },
 ];
-const closeIoEuMailApiKey = process.argv[6];
-const intercomAppIdApiKey = process.argv[7];
+const closeIoEuMailApiKey = process.argv[7];
+const intercomAppIdApiKey = process.argv[8];
 const intercomAppId = intercomAppIdApiKey.split(':')[0];
 const intercomApiKey = intercomAppIdApiKey.split(':')[1];
-const mongoConnUrl = process.argv[8];
+const mongoConnUrl = process.argv[9];
 const MongoClient = require('mongodb').MongoClient;
 const async = require('async');
 const countryData = require('country-data');
@@ -427,6 +431,12 @@ class CocoLead {
     if (user && user.id) {
       if (!this.contacts[email.toLowerCase()]) this.contacts[email.toLowerCase()] = {};
       this.contacts[email.toLowerCase()].intercomUrl = `https://app.intercom.io/a/apps/${intercomAppId}/users/${user.id}/`;
+      if (user.last_request_at) {
+        this.contacts[email.toLowerCase()].intercomLastSeen = new Date(parseInt(user.last_request_at) * 1000);
+      }
+      if (user.session_count) {
+        this.contacts[email.toLowerCase()].intercomSessionCount = parseInt(user.session_count);
+      }
     }
   }
   addTrialRequest(email, trial) {
@@ -473,6 +483,12 @@ class CocoLead {
           }
         }
       }
+      if (this.contacts[email].intercomLastSeen && (this.contacts[email].intercomLastSeen > (postData.custom['intercom_lastSeen'] || 0))) {
+        postData.custom['intercom_lastSeen'] = this.contacts[email].intercomLastSeen;
+      }
+      if (this.contacts[email].intercomSessionCount && (this.contacts[email].intercomSessionCount > (postData.custom['intercom_sessionCount'] || 0))) {
+        postData.custom['intercom_sessionCount'] = this.contacts[email].intercomSessionCount;
+      }
     }
     return postData;
   }
@@ -500,6 +516,12 @@ class CocoLead {
             putData[`custom.demo_${prop}`] = props[prop];
           }
         }
+      }
+      if (this.contacts[email].intercomLastSeen && (this.contacts[email].intercomLastSeen > (currentCustom['intercom_lastSeen'] || 0))) {
+        putData['custom.intercom_lastSeen'] = this.contacts[email].intercomLastSeen;
+      }
+      if (this.contacts[email].intercomSessionCount && (this.contacts[email].intercomSessionCount > (currentCustom['intercom_sessionCount'] || 0))) {
+        putData['custom.intercom_sessionCount'] = this.contacts[email].intercomSessionCount;
       }
     }
     for (const field of customFieldsToRemove) {
@@ -595,6 +617,8 @@ class CocoLead {
           }
         }
         if (contact.intercomUrl) noteData += `intercom_url: ${contact.intercomUrl}\n`;
+        if (contact.intercomLastSeen) noteData += `intercom_lastSeen: ${contact.intercomLastSeen}\n`;
+        if (contact.intercomSessionCount) noteData += `intercom_sessionCount: ${contact.intercomSessionCount}\n`;
         if (contact.user) {
           const user = contact.user
           noteData += `coco_userID: ${user._id}\n`;

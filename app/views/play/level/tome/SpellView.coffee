@@ -12,6 +12,7 @@ LevelComponent = require 'models/LevelComponent'
 UserCodeProblem = require 'models/UserCodeProblem'
 utils = require 'core/utils'
 CodeLog = require 'models/CodeLog'
+Zatanna = require './editor/zatanna'
 
 module.exports = class SpellView extends CocoView
   id: 'spell-view'
@@ -274,78 +275,77 @@ module.exports = class SpellView extends CocoView
           e.editor.execCommand 'gotolineend'
           return true
 
-    if me.level() < 20 or aceConfig.indentGuides
-      # Add visual ident guides
-      language = @spell.language
-      ensureLineStartsBlock = (line) ->
-        return false unless language is "python"
-        match = /^\s*([^#]+)/.exec(line)
-        return false if not match?
-        return /:\s*$/.test(match[1])
+    # Add visual indent guides
+    language = @spell.language
+    ensureLineStartsBlock = (line) ->
+      return false unless language is "python"
+      match = /^\s*([^#]+)/.exec(line)
+      return false if not match?
+      return /:\s*$/.test(match[1])
 
-      @aceSession.addDynamicMarker
-        update: (html, markerLayer, session, config) =>
-          Range = ace.require('ace/range').Range
+    @aceSession.addDynamicMarker
+      update: (html, markerLayer, session, config) =>
+        Range = ace.require('ace/range').Range
 
-          foldWidgets = @aceSession.foldWidgets
-          return if not foldWidgets?
+        foldWidgets = @aceSession.foldWidgets
+        return if not foldWidgets?
 
-          lines = @aceDoc.getAllLines()
-          startOfRow = (r) ->
-            str = lines[r]
-            ar = str.match(/^\s*/)
-            ar.pop().length
+        lines = @aceDoc.getAllLines()
+        startOfRow = (r) ->
+          str = lines[r]
+          ar = str.match(/^\s*/)
+          ar.pop().length
 
-          colors = [{border: '74,144,226', fill: '108,162,226'}, {border: '132,180,235', fill: '230,237,245'}]
+        colors = [{border: '74,144,226', fill: '108,162,226'}, {border: '132,180,235', fill: '230,237,245'}]
 
-          for row in [0..@aceSession.getLength()]
-            foldWidgets[row] = @aceSession.getFoldWidget(row) unless foldWidgets[row]?
-            continue unless foldWidgets? and foldWidgets[row] is "start"
-            try
-              docRange = @aceSession.getFoldWidgetRange(row)
-            catch error
-              console.warn "Couldn't find fold widget docRange for row #{row}:", error
-            if not docRange?
-              guess = startOfRow(row)
-              docRange = new Range(row,guess,row,guess+4)
+        for row in [0..@aceSession.getLength()]
+          foldWidgets[row] = @aceSession.getFoldWidget(row) unless foldWidgets[row]?
+          continue unless foldWidgets? and foldWidgets[row] is "start"
+          try
+            docRange = @aceSession.getFoldWidgetRange(row)
+          catch error
+            console.warn "Couldn't find fold widget docRange for row #{row}:", error
+          if not docRange?
+            guess = startOfRow(row)
+            docRange = new Range(row,guess,row,guess+4)
 
-            continue unless ensureLineStartsBlock(lines[row])
+          continue unless ensureLineStartsBlock(lines[row])
 
-            if /^\s+$/.test lines[docRange.end.row+1]
-              docRange.end.row += 1
+          if /^\s+$/.test lines[docRange.end.row+1]
+            docRange.end.row += 1
 
-            xstart = startOfRow(row)
-            if language is 'python'
-              requiredIndent = new RegExp '^' + new Array(xstart / 4 + 1).join('(    |\t)') + '(    |\t)+(\\S|\\s*$)'
-              for crow in [docRange.start.row+1..docRange.end.row]
-                unless requiredIndent.test lines[crow]
-                  docRange.end.row = crow - 1
-                  break
+          xstart = startOfRow(row)
+          if language is 'python'
+            requiredIndent = new RegExp '^' + new Array(Math.floor(xstart / 4 + 1)).join('(    |\t)') + '(    |\t)+(\\S|\\s*$)'
+            for crow in [docRange.start.row+1..docRange.end.row]
+              unless requiredIndent.test lines[crow]
+                docRange.end.row = crow - 1
+                break
 
-            rstart = @aceSession.documentToScreenPosition docRange.start.row, docRange.start.column
-            rend = @aceSession.documentToScreenPosition docRange.end.row, docRange.end.column
-            range = new Range rstart.row, rstart.column, rend.row, rend.column
-            level = Math.floor(xstart / 4)
-            color = colors[level % colors.length]
-            bw = 3
-            to = markerLayer.$getTop(range.start.row, config)
-            t = markerLayer.$getTop(range.start.row + 1, config)
-            h = config.lineHeight * (range.end.row - range.start.row)
-            l = markerLayer.$padding + xstart * config.characterWidth
-            # w = (data.i - data.b) * config.characterWidth
-            w = 4 * config.characterWidth
-            fw = config.characterWidth * ( @aceSession.getScreenLastRowColumn(range.start.row) - xstart )
+          rstart = @aceSession.documentToScreenPosition docRange.start.row, docRange.start.column
+          rend = @aceSession.documentToScreenPosition docRange.end.row, docRange.end.column
+          range = new Range rstart.row, rstart.column, rend.row, rend.column
+          level = Math.floor(xstart / 4)
+          color = colors[level % colors.length]
+          bw = 3
+          to = markerLayer.$getTop(range.start.row, config)
+          t = markerLayer.$getTop(range.start.row + 1, config)
+          h = config.lineHeight * (range.end.row - range.start.row)
+          l = markerLayer.$padding + xstart * config.characterWidth
+          # w = (data.i - data.b) * config.characterWidth
+          w = 4 * config.characterWidth
+          fw = config.characterWidth * ( @aceSession.getScreenLastRowColumn(range.start.row) - xstart )
 
-            html.push """
-              <div style=
-                "position: absolute; top: #{to}px; left: #{l}px; width: #{fw+bw}px; height: #{config.lineHeight}px;
-                 border: #{bw}px solid rgba(#{color.border},1); border-left: none;"
-              ></div>
-              <div style=
-                "position: absolute; top: #{t}px; left: #{l}px; width: #{w}px; height: #{h}px; background-color: rgba(#{color.fill},0.5);
-                 border-right: #{bw}px solid rgba(#{color.border},1); border-bottom: #{bw}px solid rgba(#{color.border},1);"
-              ></div>
-            """
+          html.push """
+            <div style=
+              "position: absolute; top: #{to}px; left: #{l}px; width: #{fw+bw}px; height: #{config.lineHeight}px;
+               border: #{bw}px solid rgba(#{color.border},1); border-left: none;"
+            ></div>
+            <div style=
+              "position: absolute; top: #{t}px; left: #{l}px; width: #{w}px; height: #{h}px; background-color: rgba(#{color.fill},0.5);
+               border-right: #{bw}px solid rgba(#{color.border},1); border-bottom: #{bw}px solid rgba(#{color.border},1);"
+            ></div>
+          """
 
   fillACE: ->
     @ace.setValue @spell.source
@@ -484,7 +484,6 @@ module.exports = class SpellView extends CocoView
       completers:
         keywords: false
         snippets: @autocomplete
-        text: @autocomplete
       autoLineEndings:
         javascript: ';'
       popupFontSizePx: popupFontSizePx
@@ -501,89 +500,9 @@ module.exports = class SpellView extends CocoView
     # name: displayed left-justified in popup, and what's being matched
     # tabTrigger: fallback for name field
     return unless @zatanna and @autocomplete
-    snippetEntries = []
-    haveFindNearestEnemy = false
-    haveFindNearest = false
-    for group, props of e.propGroups
-      for prop in props
-        if _.isString prop  # organizePalette
-          owner = group
-        else                # organizePaletteHero
-          owner = prop.owner
-          prop = prop.prop
-        doc = _.find (e.allDocs['__' + prop] ? []), (doc) ->
-          return true if doc.owner is owner
-          return (owner is 'this' or owner is 'more') and (not doc.owner? or doc.owner is 'this')
-        if doc?.snippets?[e.language]
-          name = doc.name
-          content = doc.snippets[e.language].code
-          if /loop/.test(content) and @options.level.get 'moveRightLoopSnippet'
-            # Replace default loop snippet with an embedded moveRight()
-            content = switch e.language
-              when 'python' then 'loop:\n    self.moveRight()\n    ${1:}'
-              when 'javascript' then 'loop {\n    this.moveRight();\n    ${1:}\n}'
-              else content
-          if /loop/.test(content) and @options.level.get('type') in ['course', 'course-ladder']
-            # Temporary hackery to make it look like we meant while True: in our loop snippets until we can update everything
-            content = switch e.language
-              when 'python' then content.replace /loop:/, 'while True:'
-              when 'javascript' then content.replace /loop/, 'while (true)'
-              when 'lua' then content.replace /loop/, 'while true then'
-              when 'coffeescript' then content
-              else content
-            name = switch e.language
-              when 'python' then 'while True'
-              when 'coffeescript' then 'loop'
-              else 'while true'
-          # For now, update autocomplete to use hero instead of self/this, if hero is already used in the source.
-          # Later, we should make this happen all the time - or better yet update the snippets.
-          source = @getSource()
-          if /hero/.test(source) or not /(self[\.\:]|this\.|\@)/.test(source)
-            thisToken =
-              'python': /self/,
-              'javascript': /this/,
-              'lua': /self/
-            if thisToken[e.language] and thisToken[e.language].test(content)
-              content = content.replace thisToken[e.language], 'hero'
+    @zatanna.addCodeCombatSnippets @options.level, @, e
 
-          entry =
-            content: content
-            meta: $.i18n.t('keyboard_shortcuts.press_enter', defaultValue: 'press enter')
-            name: name
-            tabTrigger: doc.snippets[e.language].tab
-            importance: doc.autoCompletePriority ? 1.0
-          haveFindNearestEnemy ||= name is 'findNearestEnemy'
-          haveFindNearest ||= name is 'findNearest'
-          if name is 'attack'
-            # Postpone this until we know if findNearestEnemy is available
-            attackEntry = entry
-          else
-            snippetEntries.push entry
-
-          if doc.userShouldCaptureReturn
-            varName = doc.userShouldCaptureReturn.variableName ? 'result'
-            entry.captureReturn = switch e.language
-              when 'javascript' then 'var ' + varName + ' = '
-              #when 'lua' then 'local ' + varName + ' = '  # TODO: should we do this?
-              else varName + ' = '
-
-    # TODO: Generalize this snippet replacement
-    # TODO: Where should this logic live, and what format should it be in?
-    if attackEntry?
-      unless haveFindNearestEnemy or haveFindNearest or @options.level.get('slug') in ['known-enemy', 'course-known-enemy']
-        # No findNearestEnemy, so update attack snippet to string-based target
-        # (On Known Enemy, we are introducing enemy2 = "Gert", so we want them to do attack(enemy2).)
-        attackEntry.content = attackEntry.content.replace '${1:enemy}', '"${1:Enemy Name}"'
-      snippetEntries.push attackEntry
-
-    if haveFindNearest and not haveFindNearestEnemy
-      @translateFindNearest()
-
-    # window.zatannaInstance = @zatanna  # For debugging. Make sure to not leave active when committing.
-    # window.snippetEntries = snippetEntries
-    lang = utils.aceEditModes[e.language].substr 'ace/mode/'.length
-    @zatanna.addSnippets snippetEntries, lang
-    @editorLang = lang
+    
 
   translateFindNearest: ->
     # If they have advanced glasses but are playing a level which assumes earlier glasses, we'll adjust the sample code to use the more advanced APIs instead.
@@ -635,7 +554,7 @@ module.exports = class SpellView extends CocoView
     @createToolbarView()
 
   createDebugView: ->
-    return if @options.level.get('type', true) in ['hero', 'hero-ladder', 'hero-coop', 'course', 'course-ladder', 'game-dev', 'hero-practice']  # We'll turn this on later, maybe, but not yet.
+    return if @options.level.get('type', true) in ['hero', 'hero-ladder', 'hero-coop', 'course', 'course-ladder', 'game-dev']  # We'll turn this on later, maybe, but not yet.
     @debugView = new SpellDebugView ace: @ace, thang: @thang, spell:@spell
     @$el.append @debugView.render().$el.hide()
 
